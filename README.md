@@ -3,6 +3,8 @@
 Ett enkelt Python-skript som skrapar inlägg från en Flashback-tråd och sparar dem som CSV.
 OBS! Koden är skapad med AI (ChatGPT 5.1-codex-max). 
 
+Följ Flashbacks regler om du använder detta verktyg. Du ansvarar för ditt eget handlande.
+
 ## Förutsättningar
 - Python 3.9+
 - pip-installation av beroenden: `pip install requests beautifulsoup4`
