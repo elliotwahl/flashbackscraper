@@ -1,30 +1,32 @@
-# Flashback-trådskrapare
+# Flashback-trÃ¥dskrapare
 
-Ett enkelt Python-skript som skrapar inlägg från en Flashback-tråd och sparar dem som CSV.
+Ett enkelt Python-skript som skrapar inlÃ¤gg frÃ¥n en Flashback-trÃ¥d och sparar dem som CSV.
+OBS! Koden Ã¤r skapad med AI (ChatGPT 5.1-codex-max). 
 
-## Förutsättningar
+## FÃ¶rutsÃ¤ttningar
 - Python 3.9+
 - pip-installation av beroenden: `pip install requests beautifulsoup4`
 
-## Användning
-1) Kör skriptet:
+## AnvÃ¤ndning
+1) KÃ¶r skriptet:
    ```
    python scraper.py
    ```
-2) Klistra in URL till tråden (ex: https://www.flashback.org/t123456).
+2) Klistra in URL till trÃ¥den (ex: https://www.flashback.org/t123456).
 3) CSV sparas i arbetskatalogen med namn `<tradslug>_YYYYMMDD-HHMMSS.csv`.
 
 ## Exportformat
 CSV med semikolonseparerade kolumner:
-- Användare
+- AnvÃ¤ndare
 - Reg_datum
-- Antal_inlägg
+- Antal_inlÃ¤gg
 - Datum_Tid
-- Inlägg_ID
-- Länk
+- InlÃ¤gg_ID
+- LÃ¤nk
 - Avatar_URL
 - Post_Message
 
-## Övrigt
-- Skriptet försöker hantera både äldre och nyare Flashback-layouts.
-- Pausar kort mellan sidor för att vara snällt mot servern.
+## Ã–vrigt
+- Skriptet fÃ¶rsÃ¶ker hantera bÃ¥de Ã¤ldre och nyare Flashback-layouts.
+- Pausar kort mellan sidor fÃ¶r att vara snÃ¤llt mot servern.
+
