@@ -1,7 +1,7 @@
 # Flashback-trådskrapare
 
 Ett enkelt Python-skript som skrapar inlägg från en Flashback-tråd och sparar dem som CSV.
-OBS! Koden är skapad med AI (ChatGPT 5.1-codex-max). 
+Koden är skapad med AI (ChatGPT 5.1-codex-max). 
 
 Följ Flashbacks regler om du använder detta verktyg. Du ansvarar för ditt eget handlande.
 
@@ -31,4 +31,5 @@ CSV med semikolonseparerade kolumner:
 ## Övrigt
 - Skriptet försöker hantera både äldre och nyare Flashback-layouts.
 - Pausar kort mellan sidor för att vara snällt mot servern.
+
 
