@@ -22,10 +22,99 @@ HEADERS = {
     'Connection': 'keep-alive'
 }
 
+def ensure_start_page(url, start_page=None):
+    """Returnerar URL:en med önskad startsida insatt som p<sidnummer> om angivet."""
+    if not start_page:
+        return url
+    try:
+        page_num = int(start_page)
+    except ValueError:
+        return url
+    page_num = max(1, page_num)
+    # Ersätt befintlig p<tal> eller lägg till efter t<id>
+    return re.sub(r'(t\d+)(p\d+)?', rf'\1p{page_num}', url, count=1)
+
+def extract_page_number(url):
+    """Hämta sidnumret från en Flashback-URL, t.ex. t123p470 -> 470, annars 1."""
+    m = re.search(r'p(\d+)', url)
+    return int(m.group(1)) if m else 1
+
+def fetch_with_retries(url, headers, timeout=10, max_attempts=3, wait_seconds=30):
+    """Hämta en sida med enkla omförsök vid nätverksfel/överbelastning."""
+    for attempt in range(1, max_attempts + 1):
+        try:
+            resp = requests.get(url, headers=headers, timeout=timeout)
+            resp.raise_for_status()
+            return resp
+        except requests.exceptions.RequestException as e:
+            if attempt < max_attempts:
+                print(f"⚠️ Nätverksfel ({e}). Försöker igen om {wait_seconds}s... (försök {attempt}/{max_attempts})")
+                time.sleep(wait_seconds)
+            else:
+                print(f"❌ Nätverksfel kvarstår efter {max_attempts} försök: {e}")
+    return None
+
 def clean_text(text):
     if not text:
         return ""
     return re.sub(r'\s+', ' ', text).strip()
+
+def normalize_username(candidate):
+    """Rensa bort dubblerad text och länkdelen ('Hitta fler inlägg...')."""
+    if not candidate:
+        return ""
+    candidate = clean_text(candidate)
+    candidate = re.sub(r'\bHitta\s+.*', '', candidate, flags=re.IGNORECASE).strip()
+    m = re.match(r'^(.+?)\s+\1\b', candidate, flags=re.IGNORECASE)
+    if m:
+        return clean_text(m.group(1))
+    return candidate
+
+def extract_username(post, user_block):
+    selectors = [
+        '.post-user-username', '.post-username', '.post__user-name', '.post__username',
+        '.postusername', '.post-user-name', '.bigusername',
+        '.user-name', '.user_name', '.username',
+        'a.username', 'span.username', '.post__user a', '.userinfo a', '.user-info a',
+        '[data-username]', '[data-user]', '[data-author]', '[data-displayname]', '[data-user-name]',
+        'a[rel="author"]', 'meta[itemprop="name"]'
+    ]
+    for sel in selectors:
+        tag = post.select_one(sel)
+        if not tag:
+            continue
+        candidate = clean_text(tag.get_text(" ", strip=True))
+        if not candidate:
+            for attr in ["data-username", "data-user", "data-author", "data-displayname", "title", "aria-label"]:
+                val = tag.get(attr)
+                if val:
+                    candidate = clean_text(val)
+                    break
+        if candidate:
+            candidate = normalize_username(candidate)
+            if candidate:
+                return candidate
+
+    for attr in ["data-username", "data-user", "data-author", "data-displayname", "data-user-name", "data-userid"]:
+        val = post.get(attr)
+        if val:
+            candidate = clean_text(val)
+            if candidate:
+                candidate = normalize_username(candidate)
+                if candidate:
+                    return candidate
+
+    if user_block:
+        block_text = clean_text(user_block.get_text(" ", strip=True))
+        if block_text:
+            parts = re.split(r'Reg[:\.]|Inl[\u00e4a]gg[:\.]|Registrerad|Medlem', block_text, maxsplit=1, flags=re.IGNORECASE)
+            candidate = clean_text(parts[0]) if parts else ""
+            if candidate and not re.search(r'g\u00e4st|borttagen', candidate, re.IGNORECASE):
+                candidate = normalize_username(candidate)
+                if candidate:
+                    return candidate
+
+    return "G\u00e4st/Borttagen"
 
 def derive_output_filename(url):
     parsed = urlparse(url)
@@ -51,15 +140,16 @@ def resolve_output_file(start_url):
         return OUTPUT_FILE
     return derive_output_filename(start_url)
 
-def scrape_thread(start_url):
+def scrape_thread(start_url, start_page=None):
     print(f"🚀 Startar skrapning av: {start_url}")
     
-    current_url = start_url
     posts_collected = 0
-    page_number = 1
     output_file = resolve_output_file(start_url)
     
-    # Öppna filen för skrivning
+    # Anpassa start-URL om start_page angivits (t.ex. t123p470)
+    current_url = ensure_start_page(start_url, start_page)
+    page_number = extract_page_number(current_url)
+
     with open(output_file, 'w', newline='', encoding='utf-8-sig') as f: # utf-8-sig för att Excel ska läsa åäö rätt
         writer = csv.writer(f, delimiter=';') # Semikolon är ofta bättre för Excel i Sverige
         writer.writerow([
@@ -76,10 +166,11 @@ def scrape_thread(start_url):
         while current_url:
             print(f"⏳ Bearbetar sida {page_number}...")
             
+            response = fetch_with_retries(current_url, HEADERS, timeout=10, max_attempts=3, wait_seconds=30)
+            if response is None:
+                break
+
             try:
-                response = requests.get(current_url, headers=HEADERS, timeout=10)
-                response.raise_for_status()
-                
                 # Flashback använder ofta iso-8859-1, men requests+bs4 brukar lösa det.
                 # Vi tvingar encoding om det behövs, men 'response.content' till BS4 är säkrast.
                 soup = BeautifulSoup(response.content, 'html.parser')
@@ -152,9 +243,7 @@ def scrape_thread(start_url):
                         # 2. Användare
                         # Kan vara en länk eller bara text om användaren är borttagen
                         user_block = post.select_one('.post-user-info, .post-user, .post__user, .userinfo, .user-info, .post-user-container')
-                        user_tag = post.select_one('.post-user-username, a.username, span.username, .post__user a, a[href*="member.php"]')
-                        
-                        username = user_tag.get_text(strip=True) if user_tag else "Gäst/Borttagen"
+                        username = extract_username(post, user_block)
                         user_text = user_block.get_text(" ", strip=True) if user_block else ""
 
                         # Registreringsdatum
@@ -254,9 +343,6 @@ def scrape_thread(start_url):
                     print("🏁 Inga fler sidor hittades.")
                     current_url = None
                     
-            except requests.exceptions.RequestException as e:
-                print(f"❌ Nätverksfel: {e}")
-                break
             except Exception as e:
                 print(f"❌ Oväntat fel: {e}")
                 break
@@ -270,6 +356,8 @@ if __name__ == "__main__":
         print("--- Flashback Trådskrapare ---")
         url_in = input("Klistra in URL till tråden (t.ex. https://www.flashback.org/t123456): ").strip()
         if url_in:
-            scrape_thread(url_in)
+            page_in = input("Starta från sida (valfritt, t.ex. 470): ").strip()
+            page_val = int(page_in) if page_in.isdigit() else None
+            scrape_thread(url_in, page_val)
         else:
             print("Ingen URL angiven. Avslutar.")
